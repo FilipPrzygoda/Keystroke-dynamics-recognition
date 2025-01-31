@@ -1,0 +1,86 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+import glob
+# Zmienna określająca, czy chcemy wczytać główny plik
+use_main_data = True
+
+# Zmienna określająca, czy chcemy wczytać pliki z folderu "dane"
+use_additional_data = True
+
+# Ścieżka do głównego pliku
+data_path = "DSL-StrongPasswordData.csv"
+
+# Ścieżka do folderu "dane" oraz hasło (część wzorca w nazwie pliku)
+folder_path = "dane"
+password = ".tie5Roanl"
+
+# Lista DataFrame'ów ze wszystkich źródeł, którą na końcu połączymy
+df_list = []
+
+# =====================================================================
+# 1. Wczytanie danych z pliku DSL-StrongPasswordData.csv (opcjonalnie)
+# =====================================================================
+if use_main_data:
+    try:
+        df_main = pd.read_csv(data_path)
+        df_list.append(df_main)
+        print(f"Wczytano główny plik: {data_path}, rozmiar: {df_main.shape}")
+    except FileNotFoundError:
+        print(f"Nie znaleziono pliku: {data_path} (use_main_data=True)")
+
+# =====================================================================
+# 2. Wczytanie danych z folderu 'dane' (opcjonalnie)
+# =====================================================================
+if use_additional_data:
+    pattern = os.path.join(folder_path, f"*_{password}_keystroke_aggregated.csv")
+    file_list = glob.glob(pattern)
+
+    for file in file_list:
+        try:
+            temp_df = pd.read_csv(file)
+            df_list.append(temp_df)
+            print(f"Wczytano plik: {file}, rozmiar: {temp_df.shape}")
+        except Exception as e:
+            print(f"Nie udało się wczytać pliku {file}. Błąd: {e}")
+
+# =====================================================================
+# 3. Łączenie danych w jeden DataFrame
+# =====================================================================
+if df_list:
+    df = pd.concat(df_list, ignore_index=True)
+    print(f"\nPołączony DataFrame ma kształt: {df.shape}")
+else:
+    # Jeśli nie wczytano żadnych plików (puste df_list),
+    # można wywołać wyjątek lub przypisać None
+    df = None
+    print("\nNie wczytano żadnych danych - df = None")
+    
+# Wybierz użytkownika
+subject_id = 7
+filtered_data = df[df['subject'] == subject_id]
+
+# Oblicz średnie wartości dla każdej sesji
+session_stats = filtered_data.groupby('sessionIndex').mean()
+
+# Wybór kolumn dla różnych czasów
+hold_columns = [col for col in session_stats.columns if col.startswith('H.')]
+dd_columns = [col for col in session_stats.columns if col.startswith('DD.')]
+ud_columns = [col for col in session_stats.columns if col.startswith('UD.')]
+
+# Oblicz średnie wartości dla każdego typu czasów
+mean_hold = session_stats[hold_columns].mean(axis=1)
+mean_dd = session_stats[dd_columns].mean(axis=1)
+mean_ud = session_stats[ud_columns].mean(axis=1)
+
+# Tworzenie wykresu
+plt.figure(figsize=(12, 6))
+plt.plot(session_stats.index, mean_hold, marker='o', label='Średni czas przytrzymania klawisza (H)')
+plt.plot(session_stats.index, mean_dd, marker='o', label='Średni czas między puszczeniem jednego klawisza a wciśnięciem następnego (DD)', color='orange')
+plt.plot(session_stats.index, mean_ud, marker='o', label='Średni czas między wciśnięciami kolejnych klawiszy (UD)', color='green')
+plt.title(f"Średnie profie czasowe dla użytkownika {subject_id}")
+plt.xlabel("Nr sesji")
+plt.ylabel("Czas (ms)")
+plt.legend()
+plt.grid()
+plt.show()
